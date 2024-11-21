@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.0.0
+.VERSION 1.0.1
 
 .GUID d0f7effa-e5c1-482c-98bd-f942160d246e
 
@@ -8,16 +8,29 @@
 
 .COMPANYNAME Adam Danischewski
 
+.COPYRIGHT (c) 2024 Adam Danischewski
+
 .TAGS PowerShell Windows AppManager ApplicationManager AppMgr
 
 .PROJECTURI https://github.com/AdamDanischewski/AppMgr
+
+.DESCRIPTION
+A PowerShell script for managing Windows applications using winget and other package managers.
+Provides comprehensive application management functionality including installation, removal, and repair.
 
 .RELEASENOTES
 [Version 0.0.1] - Initial Release.
 [Version 0.0.2] - Refactored, updated parameter logic for AppMgr.
 [Version 1.0.0] - Removed trailing whitespace and invoke-expression syntax.
-#>
+[Version 1.0.1] - Removed trailing whitespace and invoke-expression syntax.
 
+.REQUIREDSCRIPTS
+
+.EXTERNALMODULEDEPENDENCIES
+
+.PRIVATEDATA
+
+#>
 function AppMgr {
     <#
 .SYNOPSIS
@@ -46,7 +59,7 @@ Displays the version of the script.
 .PARAMETER Help
 Displays the full help information for the script.
 .NOTES
-Version : 1.0.0
+Version : 1.0.1
 Created by : Adam Danischewski
 .LINK
 Project Site: https://github.com/AdamDanischewski/AppMgr
@@ -63,7 +76,7 @@ Project Site: https://github.com/AdamDanischewski/AppMgr
     [string]$c_InvalidOption = ">> Invalid option (`"{0}`"): Valid options are: remove, reset, repair, add or help."
     [string]$c_PackageNotFound = "Package ({0}) not found. Are you sure it's installed ?"
     [string]$bad_action = ""
-    [string]$c_Version = "1.0.0"
+    [string]$c_Version = "1.0.1"
 
     if ($Version) { $Action = "version" }
 
