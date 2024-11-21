@@ -1,161 +1,149 @@
 <#PSScriptInfo
  
-.VERSION 0.0.1
+.VERSION 0.0.2
  
 .GUID d0f7effa-e5c1-482c-98bd-f942160d246e
  
-.AUTHOR adanisch
+.AUTHOR Adam Danischewski
  
-.COMPANYNAME adanisch
+.COMPANYNAME Adam Danischewski
  
-.TAGS PowerShell Windows winget win get install installer fix script setup
+.TAGS PowerShell Windows AppManager ApplicationManager AppMgr
  
 .PROJECTURI https://github.com/AdamDanischewski/AppMgr
  
 .RELEASENOTES
 [Version 0.0.1] - Initial Release. 
+[Version 0.0.2] - Refactored, updated parameter logic for AppMgr.  
 #>
 
+function AppMgr {
 <#
 .SYNOPSIS
-    Downloads and installs the latest version of winget and its dependencies.
+    Simplifies management (add/remove/repair/reset) of apps 
 .DESCRIPTION
-    Downloads and installs the latest version of winget and its dependencies.
- 
-This script is designed to be straightforward and easy to use, removing the hassle of manually downloading, installing, and configuring winget. This function should be run with administrative privileges.
+    
+This script allows the user to add/remove/reset/repair apps using shortnames, if multiple matches are found they will be listed for the user to select. Requires winget - app will automatically downloads and installs the latest version of winget and its dependencies if necessary. 
 .EXAMPLE
-    winget-install
-.PARAMETER Debug
-    Enables debug mode, which shows additional information for debugging.
-.PARAMETER Force
-    Ensures installation of winget and its dependencies, even if already present.
-.PARAMETER ForceClose
-    Relaunches the script in conhost.exe and automatically ends active processes associated with winget that could interfere with the installation.
-.PARAMETER Wait
-    Forces the script to wait several seconds before exiting.
-.PARAMETER NoExit
-    Forces the script to wait indefinitely before exiting.
-.PARAMETER UpdateSelf
-    Updates the script to the latest version on PSGallery.
-.PARAMETER CheckForUpdate
-    Checks if there is an update available for the script.
+    AppMgr add calc 
+    AppMgr -AppName calc -Action add 
+.EXAMPLE
+    AppMgr repair wt 1
+    AppMgr -AppName terminal -Action repair -msStoreVer $true
+    
+    Note: "terminal" and "wt" are both short names for Windows Terminal. 
+.EXAMPLE
+    AppMgr remove wt 1 
+    AppMgr -AppName wt -Action remove -msStoreVer $true 
+    AppMgr -name wt -a remove -S 1 
+.EXAMPLE
+    AppMgr reset notepad 1 
+    AppMgr -AppName wt -Action remove -msStoreVer $true 
+    AppMgr -name wt -a remove -S 1 
 .PARAMETER Version
     Displays the version of the script.
 .PARAMETER Help
     Displays the full help information for the script.
 .NOTES
-    Version : 5.0.4
-    Created by : asheroto
+    Version : 0.0.2
+    Created by : Adam Danischewski
 .LINK
-    Project Site: https://github.com/asheroto/winget-install
+    Project Site: https://github.com/AdamDanischewski/AppMgr
 #>
-function AppManager {
-    [string]$c_InvalidOption = " >> Invalid option ({0}): Valid options are --remove, --reset, --repair, --add or --help." 
-    [string]$c_PackageNotFound = "Package ({0}) not found. Are you sure it's installed?"
-    [bool]$f_option_error = $false 
+[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletBinding', '')]
+    param(
+        [Parameter(Mandatory = $false, Position = 0, ParameterSetName = 'Action')]
+        [Alias('a')][string]$Action,
+        [Parameter(Mandatory = $false, Position = 1)][Alias('n')][string]$AppName,
+        [Parameter(Mandatory = $false, Position = 2)][ValidateSet("true", "1", $true, "false", $false, 0)]
+        [Alias('ms', 'store', 's')][object]$msStoreVer = $false, 
+        [Parameter(Mandatory = $false, Position = 3)][Alias('v')][switch]$Version
+    )
+    [string]$c_InvalidOption = ">> Invalid option (`"{0}`"): Valid options are: remove, reset, repair, add or help." 
+    [string]$c_PackageNotFound = "Package ({0}) not found. Are you sure it's installed ?"
     [string]$bad_action = "" 
+    [string]$c_Version = "0.0.2" 
 
-    ## Sanity check, make sure we have winget  
-    $winget_cmd = get-command winget -ErrorAction SilentlyContinue
-    if (-not $winget_cmd) {
-        Write-host (">> Winget is not installed, would you like to install it via winget-install`n" +
-                   "from Powershell gallery?") -ForegroundColor DarkCyan
-        $selection = Read-Host "Enter [Y/n]:"
-        if ($selection -eq "Y") { 
-            $wgi_process = Start-Process powershell -Verb RunAs '-Command', "install-script winget-install -force -confirm" -wait -PassThru
-            if ($wgi_process.ExitCode -eq 0) { 
-                Write-Host ">> Installed winget-install .." -ForegroundColor Green
-            } else { 
-                throw ("Couldn't install winget-install exit code was: {0}" -f $wgi_process.ExitCODE) 
-            }
-            $wgicmd = Get-Command winget-install | Select-Object -ExpandProperty Definition
-            $wgi_cmd_process = Start-Process powershell -Verb RunAs "-Command", "$wgicmd -force -wait" -wait -PassThru
-            if ($wgi_cmd_process.ExitCode -in @(0,1)) { 
-                Write-host ">> Success, winget is now installed!!" -ForegroundColor Green
-            } else { 
-                throw "Something went wrong installing winget, exit code: $($wgi_cmd_process.ExitCode)"               
-            } 
-        } else { 
-            throw "Couldn't find winget-install - perhaps paths? Not sure ;( .."
-        }
-    }
+    if ($Version) { $Action = "version" }
 
-    # Parse action, we expect positional args: (first argument)
-    $Action = if ($args[0] -match '^-{1,2}(add|remove|reset|repair|help)$') {
-        "--$($matches[1])"
+    if ($Action -notin @("add", "repair", "remove", "reset", "help", "version")) { 
+        $bad_action = $Action 
+        $Action = "help"
     }
-    else {
-        $f_option_error = $true
-        $bad_action = $args[0] ## No match to above regex
-        "--help"
+    else { 
+        ## Make sure we have winget  
+        $winget_cmd = get-command winget -ErrorAction SilentlyContinue
+        if (-not $winget_cmd) { Install-AppMgrWinGet }
+    
+        $msStoreVer = $msStoreVer -in @($true, "true", 1)
     }
-    
-    $appName = $args[1]
-    $msStoreVer = if ($args[2]) { $args[2] -in @($true, "true", 1) } else { $false }
-    
+        
     # Write-Host "Value of `$Action is: $Action"  
-    $AppName = if ($Action -ne "--help") { 
-        if ($Action -in @("--remove", "--reset")) { 
-            getAppMapping $AppName $false
+    $AppName = if ($Action -notin @("help", "version")) { 
+        if ($Action -in @("remove", "reset")) { 
+            Get-AppMgrMapping $AppName $false
         }
         else {             
-            getAppMapping $AppName ($msStoreVer -or ($Action -in @("--repair", "--add")))
+            Get-AppMgrMapping $AppName ($msStoreVer -or ($Action -in @("repair", "add")))
         }
         Write-Host "[Processing: $AppName with command $Action]" -ForegroundColor Blue
     }
 
     switch ($Action) {
-        "--remove" {
+        "remove" {
             Write-Host "Removing app: $AppName ..."
             $package = Get-AppxPackage -Name $AppName
             if ($package) {
                 Remove-AppxPackage -Package $package -WhatIf:$false -Confirm:$false
                 if ($LASTEXITCODE -eq 0) { Write-Host "Successfully removed app: $AppName." -f Yellow }
-                else { Write-CustomError ("Package {0} could not be removed." -f $AppName) }
+                else { Write-AppMgrCustomError ("Package {0} could not be removed." -f $AppName) }
             }
             else { 
-                Write-CustomError ($c_PackageNotFound -f $AppName)
+                Write-AppMgrCustomError ($c_PackageNotFound -f $AppName)
             }
         }
-        "--reset" {
+        "reset" {
             Write-Host "Resetting app: $AppName ..."
             $package = Get-AppxPackage -Name $AppName
             if ($package) {
                 Reset-AppxPackage -Package $package -WhatIf:$false -Confirm:$false
                 if ($LASTEXITCODE -eq 0) { Write-Host "Successfully reset app: $AppName." -f Yellow }
-                else { Write-CustomError ("Package {0} could not be reset." -f $AppName) }
+                else { Write-AppMgrCustomError ("Package {0} could not be reset." -f $AppName) }
             }
             else { 
-                Write-CustomError ($c_PackageNotFound -f $AppName)
+                Write-AppMgrCustomError ($c_PackageNotFound -f $AppName)
             }
         }
-        "--add" {
+        "add" {
             Write-Host "Adding app: $AppName ..."
-            $packageID = Get-AppID $AppName $msStoreVer
+            $packageID = Get-AppMgrAppID $AppName $msStoreVer
             if ($null -ne $packageID) { 
                 winget install $packageID --accept-source-agreements --accept-package-agreements
             }
             else { 
-                Write-CustomError ($c_PackageNotFound -f $AppName)
+                Write-AppMgrCustomError ($c_PackageNotFound -f $AppName)
             }
         }
-        "--repair" {
+        "version" {
+            Write-Output "AppMgr Version - $c_Version"
+        }
+        "repair" {
             Write-Host "Repairing app: $packageName ..."
             Write-Host "[Searching for $AppName app id ..]" -ForegroundColor Blue
             $ErrorActionPreference = 'Stop'
-            $packageID = (Get-AppID $AppName $msStoreVer)
+            $packageID = (Get-AppMgrAppID $AppName $msStoreVer)
             if ($null -ne $packageID) { 
                 winget repair $packageID --accept-source-agreements --accept-package-agreements
             }
             else { 
-                Write-CustomError ($c_PackageNotFound -f $AppName)
+                Write-AppMgrCustomError ($c_PackageNotFound -f $AppName)
             }
         }
-        "--help" {
+        "help" {
             $heredoc = @"
 Usage:
-       AppManager (--remove|--reset|--repair|--add) <app_name> [MsStoreVer = (1,`$true,"true")]
-       AppManager --help 
+       AppMgr (remove|reset|repair|add) <app_name> [MsStoreVer = (1,`$true,"true")]
+       AppMgr help 
 
 Note: Setting the MsStoreVer flag restricts winget to source = msstore.   
 
@@ -167,39 +155,59 @@ Supported short names:
 `t  wt,terminal    -  Microsoft.WindowsTerminal / Windows Terminal
 
 Examples:
-               Remove Paint app: AppManager --remove paint
-  Reset MS Store Calculator app: AppManager --reset calc `$true
-  Reset MS Store Calculator app: AppManager --reset calc 1
-          Remove Calculator app: AppManager --remove calc
-               Repair MS WT app: AppManager --repair terminal 1
-               Add MS Paint app: AppManager --add paint 1
-
+               Remove Paint app: AppMgr remove paint
+  Reset MS Store Calculator app: AppMgr reset calc `$true
+  Reset MS Store Calculator app: AppMgr reset calc 1
+          Remove Calculator app: AppMgr -AppName calc -Action remove 
+               Repair MS WT app: AppMgr -Action repair -AppName terminal -msStoreVer 1
+         Add MS Store Paint app: AppMgr add paint 1
 "@
             Write-Host $heredoc
-            Write-Host ($c_InvalidOption -f $bad_action) -ForegroundColor Yellow
-
+            if (![string]::IsNullOrEmpty($bad_action)) { Write-Host ($c_InvalidOption -f $bad_action) -ForegroundColor Yellow }
         }
         default {
-            # Write-Host ($c_InvalidOption -f $Action) -ForegroundColor Red
-            Write-CustomError ($c_InvalidOption -f $Action)
+            Write-AppMgrCustomError ($c_InvalidOption -f $Action)
         }
     }
 }
 
-function getAppMapping { 
+function Install-AppMgrWinGet { 
+    Write-host (">> Winget is not installed, would you like to install it via winget-install`n" +
+        "from Powershell gallery?") -ForegroundColor DarkCyan
+    $selection = Read-Host "Enter [Y/n]:"
+    if ($selection -eq "Y") { 
+        $wgi_process = Start-Process powershell -Verb RunAs '-Command', "install-script winget-install -force -confirm" -wait -PassThru
+        if ($wgi_process.ExitCode -eq 0) { 
+            Write-Host ">> Installed winget-install .." -ForegroundColor Green
+        }
+        else { 
+            throw ("Couldn't install winget-install exit code was: {0}" -f $wgi_process.ExitCODE) 
+        }
+        $wgicmd = Get-Command winget-install | Select-Object -ExpandProperty Definition
+        $wgi_cmd_process = Start-Process powershell -Verb RunAs "-Command", "$wgicmd -force -wait" -wait -PassThru
+        if ($wgi_cmd_process.ExitCode -in @(0, 1)) { 
+            Write-host ">> Success, winget is now installed!!" -ForegroundColor Green
+        }
+        else { 
+            throw "Something went wrong installing winget, exit code: $($wgi_cmd_process.ExitCode)"               
+        } 
+    }
+    else { 
+        throw "Couldn't find winget-install - perhaps paths? Not sure ;( .."
+    }
+}
+
+function Get-AppMgrMapping { 
     param(
         [Parameter(Mandatory = $true, Position = 0)][string]$AppName,
-        # $WinGetVer determines mapping type:
-        # true  -> Returns display name for WinGet search (e.g., "Windows Terminal")
-        # false -> Returns AppX package name (e.g., "Microsoft.WindowsTerminal")
-        [Parameter(Mandatory = $false, Position = 1)][object]$WinGetVer = $false
+        [Parameter(Mandatory = $false, Position = 1)][object]$msStoreVer = $false
     )
-    $WinGetVer = $WinGetVer -in @($true, "true", 1)
+    $msStoreVer = $msStoreVer -in @($true, "true", 1)
     $appMap = @{}
-    $appMap["paint"] = if ($WinGetVer) { "Paint" } else { "Microsoft.Paint" }
+    $appMap["paint"] = if ($msStoreVer) { "Paint" } else { "Microsoft.Paint" }
     $appMap["mspaint"] = $appMap["paint"]
-    $appMap["calc"] = if ($WinGetVer) { "Windows Calculator" } else { "Microsoft.WindowsCalculator" }
-    $appMap["wt"] = if ($WinGetVer) { "Windows Terminal" } else { "Microsoft.WindowsTerminal" }
+    $appMap["calc"] = if ($msStoreVer) { "Windows Calculator" } else { "Microsoft.WindowsCalculator" }
+    $appMap["wt"] = if ($msStoreVer) { "Windows Terminal" } else { "Microsoft.WindowsTerminal" }
     $appMap["terminal"] = $appMap["wt"]
     $appMap["windowsterminal"] = $appMap["wt"]
     # Add more mappings as needed...
@@ -211,7 +219,7 @@ function getAppMapping {
     else { return $AppName }
 }
 
-function Get-AppID {
+function Get-AppMgrAppID {
     param(
         [Parameter(Mandatory = $true, Position = 0)][string]$AppName,
         [Parameter(Mandatory = $false, Position = 1)][object]$msStoreVer
@@ -232,7 +240,7 @@ function Get-AppID {
         $msStoreVer = $false
     }
 
-    $AppName = getAppMapping $AppName
+    $AppName = Get-AppMgrMapping $AppName
 
     $wingetSrchCmd = "winget search --name `"$AppName`"" 
     if ($msStoreVer) {
@@ -278,7 +286,7 @@ function Get-AppID {
         } | ConvertTo-Json
     } 
     catch {
-        Write-CustomError "Failed to execute winget search: $_"
+        Write-AppMgrCustomError "Failed to execute winget search: $_"
         return $null
     }
     if ($results_count -eq 0) { 
@@ -312,11 +320,9 @@ function Get-AppID {
         }
     }
 }
-
-function Write-CustomError {
+function Write-AppMgrCustomError {
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$Message,
+        [Parameter(Mandatory = $true)][string]$Message,
         [System.Management.Automation.ErrorCategory]$Category = 'NotSpecified'
     )
     try {
@@ -327,5 +333,39 @@ function Write-CustomError {
         # Write-Host "+ $($_.InvocationInfo.Line)" -ForegroundColor Red
         # Write-Host "    + CategoryInfo          : $($_.CategoryInfo)" -ForegroundColor Red
         # Write-Host "    + FullyQualifiedErrorId : $($_.FullyQualifiedErrorId)" -ForegroundColor Red
+    }
+}
+
+
+# Argument completers for AppName (using existing app mappings)
+## Add these to your profile if you'd like
+Register-ArgumentCompleter -CommandName AppMgr -ParameterName Action -ScriptBlock {
+    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+    
+    # Define the valid actions
+    $validActions = @("add", "remove", "repair", "reset", "help", "version")
+    
+    $validActions | Where-Object { 
+        $_ -like "$wordToComplete*" 
+    } | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+    }
+}
+
+Register-ArgumentCompleter -CommandName AppMgr -ParameterName AppName -ScriptBlock {
+    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+    
+    # Define your app mappings (similar to your existing Get-AppMgrMapping function)
+    $appMappings = @(
+        "paint", "mspaint", 
+        "calc", 
+        "wt", "terminal", "windowsterminal"
+        # Add more as needed
+    )
+    
+    $appMappings | Where-Object { 
+        $_ -like "$wordToComplete*" 
+    } | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
     }
 }
