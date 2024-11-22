@@ -1,36 +1,24 @@
 <#PSScriptInfo
-
 .VERSION 1.0.1
-
 .GUID d0f7effa-e5c1-482c-98bd-f942160d246e
-
 .AUTHOR Adam Danischewski
-
 .COMPANYNAME Adam Danischewski
-
 .COPYRIGHT (c) 2024 Adam Danischewski
-
-.TAGS PowerShell Windows AppManager ApplicationManager AppMgr
-
+.TAGS PowerShell Windows
 .PROJECTURI https://github.com/AdamDanischewski/AppMgr
-
-.DESCRIPTION
-A PowerShell script for managing Windows applications using winget and other package managers.
-Provides comprehensive application management functionality including installation, removal, and repair.
-
-.RELEASENOTES
-[Version 0.0.1] - Initial Release.
-[Version 0.0.2] - Refactored, updated parameter logic for AppMgr.
-[Version 1.0.0] - Removed trailing whitespace and invoke-expression syntax.
-[Version 1.0.1] - Removed trailing whitespace and invoke-expression syntax.
-
-.REQUIREDSCRIPTS
-
+.DESCRIPTION Simplifies management (add/remove/repair/reset) of apps using winget. Allows adding, removing, resetting, and repairing apps using shortnames.
+.ICONURI
 .EXTERNALMODULEDEPENDENCIES
-
+.REQUIREDSCRIPTS
+.EXTERNALSCRIPTDEPENDENCIES
+.RELEASENOTES 
+    [Version 0.0.1] - Initial Release.
+    [Version 0.0.2] - Refactored, updated parameter logic for AppMgr.
+    [Version 1.0.0] - Removed trailing whitespace and invoke-expression syntax.
+    [Version 1.0.1] - Removed trailing whitespace and invoke-expression syntax.
 .PRIVATEDATA
-
 #>
+
 function AppMgr {
     <#
 .SYNOPSIS
